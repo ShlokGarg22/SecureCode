@@ -86,6 +86,7 @@ runs:
           AI_FLAG="--enable-ai"
         fi
 
+        set +e
         python "${{ github.action_path }}/backend/app/scan.py" \
           --path "${{ inputs.path }}" \
           --rule-mode "${{ inputs.rule-mode }}" \
@@ -93,8 +94,12 @@ runs:
           --patch-output "${{ inputs.patch-output }}" \
           --sarif-output "${{ inputs.sarif-output }}" \
           --fail-on "${{ inputs.fail-on }}"
+        SCAN_EXIT=$?
+        set -e
 
         # Ensure compatibility with workflows looking for results.sarif
         if [ -f "${{ inputs.sarif-output }}" ] && [ "${{ inputs.sarif-output }}" != "results.sarif" ]; then
-          cp "${{ inputs.sarif-output }}" results.sarif || true
+          cp "${{ inputs.sarif-output }}" results.sarif 2>/dev/null || true
         fi
+
+        exit $SCAN_EXIT

@@ -177,6 +177,12 @@ def run_cli_scan(
         patch_text = generate_unified_patch(all_findings, scan_id=result.scan_id)
         patch_file.write_text(patch_text, encoding="utf-8")
         print(f"[+] Unified remediation patch saved to: {patch_file}")
+        try:
+            remediation_path = Path("remediation.patch")
+            if patch_file.resolve() != remediation_path.resolve():
+                remediation_path.write_text(patch_text, encoding="utf-8")
+        except Exception:
+            pass
 
     # Write SARIF report if requested
     if sarif_file:
@@ -184,6 +190,12 @@ def run_cli_scan(
         sarif_json = generate_sarif_report(result)
         sarif_file.write_text(json.dumps(sarif_json, indent=2), encoding="utf-8")
         print(f"[+] SARIF v2.1.0 report saved to: {sarif_file}")
+        try:
+            results_path = Path("results.sarif")
+            if sarif_file.resolve() != results_path.resolve():
+                results_path.write_text(json.dumps(sarif_json, indent=2), encoding="utf-8")
+        except Exception:
+            pass
 
     # Write GitHub Step Summary if running in GitHub Actions
     gh_summary_path = os.getenv("GITHUB_STEP_SUMMARY")
