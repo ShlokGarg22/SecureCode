@@ -86,10 +86,15 @@ runs:
           AI_FLAG="--enable-ai"
         fi
 
-        python -m app.scan \
+        python "${{ github.action_path }}/backend/app/scan.py" \
           --path "${{ inputs.path }}" \
           --rule-mode "${{ inputs.rule-mode }}" \
           $AI_FLAG \
           --patch-output "${{ inputs.patch-output }}" \
           --sarif-output "${{ inputs.sarif-output }}" \
           --fail-on "${{ inputs.fail-on }}"
+
+        # Ensure compatibility with workflows looking for results.sarif
+        if [ -f "${{ inputs.sarif-output }}" ] && [ "${{ inputs.sarif-output }}" != "results.sarif" ]; then
+          cp "${{ inputs.sarif-output }}" results.sarif || true
+        fi

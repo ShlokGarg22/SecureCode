@@ -6,6 +6,11 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
+# Ensure backend directory is in sys.path so 'app' can be imported from any location
+backend_dir = Path(__file__).resolve().parent.parent
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+
 from app.core.config import settings
 from app.models.finding import SeverityLevel, FindingStatus
 from app.models.scan import ScanResult, SeveritySummary
