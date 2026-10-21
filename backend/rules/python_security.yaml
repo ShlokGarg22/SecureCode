@@ -1,0 +1,92 @@
+rules:
+  - id: python-sql-injection-format
+    languages: [python]
+    message: "Potential SQL Injection: detected string formatting or concatenation inside an SQL query execution."
+    severity: ERROR
+    metadata:
+      category: sql-injection
+      cwe: "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      owasp: "A03:2021 - Injection"
+      remediation: "Use parameterized queries or ORM placeholders rather than formatted strings."
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: $CURSOR.execute($QUERY % ...)
+          - pattern: $CURSOR.execute(f"...", ...)
+          - pattern: $CURSOR.execute("..." + ...)
+          - pattern: $CURSOR.execute($QUERY.format(...))
+
+  - id: python-command-injection-os-system
+    languages: [python]
+    message: "Command Injection risk: executing untrusted input with os.system."
+    severity: ERROR
+    metadata:
+      category: command-injection
+      cwe: "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+      owasp: "A03:2021 - Injection"
+      remediation: "Use subprocess.run with an argument list and shell=False."
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: os.system(...)
+          - pattern: os.popen(...)
+
+  - id: python-command-injection-subprocess-shell
+    languages: [python]
+    message: "Command Injection risk: subprocess invoked with shell=True and dynamic input."
+    severity: ERROR
+    metadata:
+      category: command-injection
+      cwe: "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+      owasp: "A03:2021 - Injection"
+      remediation: "Pass arguments as a list to subprocess and set shell=False."
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.$METHOD(..., shell=True, ...)
+
+  - id: python-insecure-deserialization-pickle
+    languages: [python]
+    message: "Insecure Deserialization: pickle.loads/load can execute arbitrary code when loading untrusted data."
+    severity: ERROR
+    metadata:
+      category: insecure-deserialization
+      cwe: "CWE-502: Deserialization of Untrusted Data"
+      owasp: "A08:2021 - Software and Data Integrity Failures"
+      remediation: "Use safe serialization formats like JSON, Protocol Buffers, or safe_load for YAML."
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: pickle.loads(...)
+          - pattern: pickle.load(...)
+          - pattern: _pickle.loads(...)
+
+  - id: python-insecure-eval
+    languages: [python]
+    message: "Unsafe code execution: eval or exec used on dynamic input."
+    severity: ERROR
+    metadata:
+      category: code-injection
+      cwe: "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+      owasp: "A03:2021 - Injection"
+      remediation: "Avoid eval/exec. Use ast.literal_eval for parsing literals safely."
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: eval(...)
+          - pattern: exec(...)
+
+  - id: python-path-traversal-open
+    languages: [python]
+    message: "Potential Path Traversal: opening file paths without canonical path validation."
+    severity: WARNING
+    metadata:
+      category: path-traversal
+      cwe: "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+      owasp: "A01:2021 - Broken Access Control"
+      remediation: "Resolve paths with pathlib.Path.resolve() and verify the target resides within an allowed base directory."
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: open($PATH, ...)
+      - pattern-not: open("...", ...)

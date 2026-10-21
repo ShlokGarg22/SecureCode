@@ -1,0 +1,69 @@
+name: SecureCode CI Security & Remediation
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write  # Needed to upload SARIF to GitHub Security tab
+  actions: read
+  pull-requests: write    # Allows PR comments when push is part of a PR
+
+jobs:
+  security-scan:
+    name: Run SecureCode Security Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run SecureCode Scanner
+        uses: ./  # Uses action.yml in root of repo, or replace with <owner>/<repo>@v1
+        with:
+          path: "."
+          fail-on: "high"
+          enable-ai: "true"
+          patch-output: "remediation.patch"
+          sarif-output: "securecode.sarif"
+          groq-api-key: ${{ secrets.GROQ_API_KEY }}
+
+      - name: Upload SARIF to GitHub Security Tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "securecode.sarif"
+        continue-on-error: true
+
+      - name: Archive Remediation Patch
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: remediation-patch
+          path: remediation.patch
+          if-no-files-found: ignore
+
+      - name: Comment Remediation Diffs on Pull Request
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        continue-on-error: true
+        with:
+          script: |
+            const fs = require('fs');
+            const summaryFile = process.env.GITHUB_STEP_SUMMARY;
+            if (summaryFile && fs.existsSync(summaryFile)) {
+              const body = fs.readFileSync(summaryFile, 'utf8');
+              if (body && body.trim().length > 0) {
+                await github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: body
+                });
+              }
+            }
+

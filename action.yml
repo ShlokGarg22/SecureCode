@@ -1,0 +1,95 @@
+name: "SecureCode Zero-Hosting Security Scanner"
+description: "Zero-hosting automated security scanner powered by Semgrep, Gitleaks, AI-driven remediation diffs, unified Git patch export, and SARIF v2.1.0 generation."
+author: "DiffGuard / SecureCode"
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  path:
+    description: "Directory path within workspace to scan (defaults to repository root)"
+    required: false
+    default: "."
+  fail-on:
+    description: "Fail the workflow if vulnerabilities of this severity or higher are found (critical, high, medium, low, none)"
+    required: false
+    default: "high"
+  enable-ai:
+    description: "Enable AI/heuristic code explanations and automated patch generation ('true' or 'false')"
+    required: false
+    default: "true"
+  rule-mode:
+    description: "Rule mode to use: bundled (zero-network), online, or hybrid"
+    required: false
+    default: "bundled"
+  patch-output:
+    description: "Output file path for the unified Git remediation patch"
+    required: false
+    default: "remediation.patch"
+  sarif-output:
+    description: "Output file path for OASIS SARIF v2.1.0 report"
+    required: false
+    default: "securecode.sarif"
+  groq-api-key:
+    description: "Optional Groq API key for high-speed Llama 3.3 remediation generation"
+    required: false
+    default: ""
+  gemini-api-key:
+    description: "Optional Google Gemini API key"
+    required: false
+    default: ""
+
+outputs:
+  sarif-file:
+    description: "Path to the generated SARIF report"
+    value: ${{ inputs.sarif-output }}
+  patch-file:
+    description: "Path to the generated unified remediation patch"
+    value: ${{ inputs.patch-output }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install Gitleaks for Secret Detection
+      shell: bash
+      run: |
+        if ! command -v gitleaks &> /dev/null; then
+          echo "[*] Downloading Gitleaks binary..."
+          GITLEAKS_VERSION="8.18.2"
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz
+          sudo tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks
+          sudo chmod +x /usr/local/bin/gitleaks
+          rm -f /tmp/gitleaks.tar.gz
+          echo "[+] Gitleaks installed successfully."
+        fi
+
+    - name: Install SecureCode Scanner Dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r "${{ github.action_path }}/backend/requirements.txt"
+
+    - name: Run SecureCode Scanner
+      shell: bash
+      env:
+        PYTHONPATH: "${{ github.action_path }}/backend"
+        GROQ_API_KEY: "${{ inputs.groq-api-key }}"
+        GEMINI_API_KEY: "${{ inputs.gemini-api-key }}"
+      run: |
+        AI_FLAG=""
+        if [ "${{ inputs.enable-ai }}" = "true" ]; then
+          AI_FLAG="--enable-ai"
+        fi
+
+        python -m app.scan \
+          --path "${{ inputs.path }}" \
+          --rule-mode "${{ inputs.rule-mode }}" \
+          $AI_FLAG \
+          --patch-output "${{ inputs.patch-output }}" \
+          --sarif-output "${{ inputs.sarif-output }}" \
+          --fail-on "${{ inputs.fail-on }}"

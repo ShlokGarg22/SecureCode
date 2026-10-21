@@ -1,0 +1,45 @@
+rules:
+  - id: js-command-injection-child-process
+    languages: [javascript, typescript]
+    message: "Command Injection: child_process.exec allows arbitrary shell command execution."
+    severity: ERROR
+    metadata:
+      category: command-injection
+      cwe: "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+      owasp: "A03:2021 - Injection"
+      remediation: "Use child_process.execFile or spawn with argument arrays without shell: true."
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: child_process.exec(...)
+          - pattern: exec(...)
+
+  - id: js-code-injection-eval
+    languages: [javascript, typescript]
+    message: "Unsafe Code Execution: eval or Function constructor evaluates arbitrary strings."
+    severity: ERROR
+    metadata:
+      category: code-injection
+      cwe: "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"
+      owasp: "A03:2021 - Injection"
+      remediation: "Do not use eval or new Function() with untrusted inputs."
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: eval(...)
+          - pattern: new Function(...)
+
+  - id: js-sql-injection-query
+    languages: [javascript, typescript]
+    message: "Potential SQL Injection: query built with template literal or string concatenation."
+    severity: ERROR
+    metadata:
+      category: sql-injection
+      cwe: "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      owasp: "A03:2021 - Injection"
+      remediation: "Use parameterized queries ($1, ?), prepared statements, or ORM parameter binding."
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: $DB.query(`...${...}...`)
+          - pattern: $DB.query("..." + ...)
