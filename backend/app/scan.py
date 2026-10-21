@@ -121,6 +121,10 @@ def format_github_step_summary(result: ScanResult, fail_on: str = "high") -> str
         lines.append(f"| 🎯 **Rule ID** | `{f.rule_id}` |")
         lines.append(f"| 🏷️ **Category** | `{f.category or 'Security Vulnerability'}` |")
         lines.append(f"| 🛡️ **Confidence** | `{f.confidence.value.capitalize() if f.confidence else 'High'}` |")
+        if f.ai_explanation:
+            prov = (f.ai_explanation.provider or "").lower()
+            engine_badge = "🤖 Live AI (Groq LLaMA 3.3 70B)" if "groq" in prov else "🤖 Live AI (Google Gemini)" if "gemini" in prov else "🤖 Live AI (OpenAI)" if "openai" in prov else "🛡️ Offline Security Knowledge Base"
+            lines.append(f"| 🧠 **Analysis Engine** | `{engine_badge}` |")
         lines.append("")
 
         if f.ai_explanation:
@@ -210,7 +214,17 @@ def run_cli_scan(
     if enable_ai:
         print("[+] Generating security explanations & remediation diffs...")
         for f in all_findings:
-            f.ai_explanation = explainer_service.explain_finding(f)
+            file_context = None
+            try:
+                full_path = (scan_path / f.file_path).resolve()
+                if full_path.exists() and full_path.is_file():
+                    src_lines = full_path.read_text(encoding="utf-8", errors="replace").splitlines()
+                    start_ctx = max(0, f.line_number - 12)
+                    end_ctx = min(len(src_lines), (f.end_line_number or f.line_number) + 12)
+                    file_context = "\n".join(src_lines[start_ctx:end_ctx])
+            except Exception:
+                pass
+            f.ai_explanation = explainer_service.explain_finding(f, file_context=file_context)
 
     # Count severities
     summary = SeveritySummary()

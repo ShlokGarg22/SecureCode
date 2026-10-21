@@ -78,8 +78,8 @@ runs:
       shell: bash
       env:
         PYTHONPATH: "${{ github.action_path }}/backend"
-        GROQ_API_KEY: "${{ inputs.groq-api-key }}"
-        GEMINI_API_KEY: "${{ inputs.gemini-api-key }}"
+        GROQ_API_KEY: "${{ inputs.groq-api-key != '' && inputs.groq-api-key || env.GROQ_API_KEY }}"
+        GEMINI_API_KEY: "${{ inputs.gemini-api-key != '' && inputs.gemini-api-key || env.GEMINI_API_KEY }}"
       run: |
         AI_FLAG=""
         if [ "${{ inputs.enable-ai }}" = "true" ]; then

@@ -347,13 +347,15 @@ class EnhancedAIExplainerService:
             # Try AI providers if configured
             ai_explanation = self._try_ai_providers(finding, file_context)
             if ai_explanation:
+                print(f"    [AI Engine] Generated dynamic analysis via {ai_explanation.provider} ({ai_explanation.model})")
                 return ai_explanation
         except Exception as e:
             logger.warning(f"AI explanation failed, falling back to deterministic: {e}")
+            print(f"    [AI Engine] Provider notice: {e}. Using deterministic engine.")
         
         # Fall back to deterministic explanation
         explanation = self.get_extended_deterministic_explanation(finding)
-        explanation.provider = "deterministic-engine"
+        explanation.provider = "offline-knowledge-base"
         return explanation
     
     def _try_ai_providers(self, finding: Finding, file_context: Optional[str] = None) -> Optional[AIExplanation]:
@@ -370,18 +372,23 @@ class EnhancedAIExplainerService:
         else:
             providers = [self.provider]
         
+        groq_key = os.getenv("GROQ_API_KEY") or settings.groq_api_key
+        gemini_key = os.getenv("GEMINI_API_KEY") or settings.gemini_api_key
+        openai_key = os.getenv("OPENAI_API_KEY") or settings.openai_api_key
+
         for provider in providers:
             try:
-                if provider == "groq" and os.getenv("GROQ_API_KEY"):
+                if provider == "groq" and groq_key:
                     return self._call_groq_api(finding, prompt)
-                elif provider == "gemini" and os.getenv("GEMINI_API_KEY"):
+                elif provider == "gemini" and gemini_key:
                     return self._call_gemini_api(finding, prompt)
                 elif provider == "bedrock" and os.getenv("AWS_ACCESS_KEY_ID"):
                     return self._call_bedrock_api(finding, prompt)
-                elif provider == "openai" and os.getenv("OPENAI_API_KEY"):
+                elif provider == "openai" and openai_key:
                     return self._call_openai_api(finding, prompt)
             except Exception as e:
                 logger.debug(f"AI provider {provider} failed: {e}")
+                print(f"    [AI Engine] {provider} attempted but failed: {e}")
                 continue
         
         return None
@@ -414,18 +421,19 @@ class EnhancedAIExplainerService:
         )
     
     def _call_groq_api(self, finding: Finding, prompt: str) -> AIExplanation:
-        """Call Groq API for explanation."""
+        """Call Groq API for explanation using high-speed Llama 3.3 70B."""
         try:
             import app.ai.explainer as exp_mod
             Groq_cls = getattr(exp_mod, "Groq", None)
             if Groq_cls is None:
                 from groq import Groq as Groq_cls
-            client = Groq_cls(api_key=settings.groq_api_key or os.getenv("GROQ_API_KEY"))
-            groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+            api_key = os.getenv("GROQ_API_KEY") or settings.groq_api_key
+            client = Groq_cls(api_key=api_key)
+            groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
             
             chat_completion = client.chat.completions.create(
                 messages=[
-                    {"role": "system", "content": "You are a senior security engineer. Return JSON only."},
+                    {"role": "system", "content": "You are a senior security engineer and code auditor. Return valid JSON only."},
                     {"role": "user", "content": prompt}
                 ],
                 model=groq_model,
@@ -437,7 +445,7 @@ class EnhancedAIExplainerService:
             parsed = json.loads(text_out)
             
             return AIExplanation(
-                provider="groq",
+                provider="groq-llama-3.3-70b",
                 model=groq_model,
                 line_start=finding.line_number,
                 line_end=finding.end_line_number or finding.line_number,
@@ -454,10 +462,12 @@ class EnhancedAIExplainerService:
             genai_mod = getattr(exp_mod, "genai", None)
             if genai_mod is None:
                 from google import genai as genai_mod
-            client = genai_mod.Client(api_key=settings.gemini_api_key or os.getenv("GEMINI_API_KEY"))
+            api_key = os.getenv("GEMINI_API_KEY") or settings.gemini_api_key
+            client = genai_mod.Client(api_key=api_key)
+            gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
             
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=gemini_model,
                 contents=prompt,
             )
             
