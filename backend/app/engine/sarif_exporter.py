@@ -90,7 +90,7 @@ def generate_sarif_report(scan_result: ScanResult) -> Dict[str, Any]:
                     "description": {
                         "text": f.ai_explanation.recommended_fix or "Apply AI remediation"
                     },
-                    "fileChanges": [
+                    "artifactChanges": [
                         {
                             "artifactLocation": {
                                 "uri": clean_path,

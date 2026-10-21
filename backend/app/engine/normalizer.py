@@ -41,6 +41,49 @@ def sanitize_snippet(snippet: str, max_chars: int = 400) -> str:
     return clean
 
 
+def clean_rule_id_and_title(raw_check_id: str) -> tuple[str, str]:
+    """
+    Extract clean rule identifier and human-readable title without runner directory junk.
+    """
+    clean_id = raw_check_id.replace("\\", "/")
+    if "/" in clean_id:
+        clean_id = clean_id.split("/")[-1]
+    if "rules." in clean_id:
+        clean_id = clean_id.split("rules.")[-1]
+    elif "." in clean_id:
+        parts = clean_id.split(".")
+        clean_id = parts[-1]
+
+    curated_titles = {
+        "generic-hardcoded-api-key-assignment": "Hardcoded API Key / Secret Credential",
+        "python-path-traversal-open": "Arbitrary File Access via Path Traversal",
+        "python-command-injection-os-system": "Command Injection via Shell (os.system)",
+        "python-insecure-deserialization-pickle": "Remote Code Execution via Pickle Deserialization",
+        "python-insecure-eval": "Dangerous Code Execution via eval()",
+        "python-sql-injection": "SQL Injection in Database Query",
+        "python-ssrf": "Server-Side Request Forgery (SSRF)",
+        "python-weak-hash-md5": "Weak Hash Algorithm (MD5)",
+        "python-weak-hash-sha1": "Weak Hash Algorithm (SHA-1)",
+        "python-insecure-temp-file": "Insecure Temporary File Creation",
+        "generic-hardcoded-jwt-token": "Hardcoded JSON Web Token (JWT)",
+        "generic-hardcoded-password": "Hardcoded Plaintext Password",
+    }
+
+    if clean_id in curated_titles:
+        return clean_id, curated_titles[clean_id]
+
+    words = clean_id.replace("-", " ").replace("_", " ").split()
+    capitalized = []
+    acronyms = {"api", "sql", "ssrf", "xss", "rce", "jwt", "aws", "url", "id", "os", "ip", "sha1", "md5", "des", "json", "xml", "csv"}
+    for w in words:
+        if w.lower() in acronyms:
+            capitalized.append(w.upper())
+        else:
+            capitalized.append(w.capitalize())
+
+    return clean_id, " ".join(capitalized)
+
+
 def normalize_semgrep_findings(
     raw_data: Dict[str, Any],
     base_dir: Path,
@@ -54,6 +97,7 @@ def normalize_semgrep_findings(
 
     for item in raw_results:
         check_id = item.get("check_id", "unknown-rule")
+        rule_id, title = clean_rule_id_and_title(check_id)
         path_str = item.get("path", "")
         
         # Convert path to relative path with forward slashes
@@ -90,17 +134,15 @@ def normalize_semgrep_findings(
 
         # Compute stable content fingerprint
         fingerprint = Finding.compute_fingerprint(
-            rule_id=check_id,
+            rule_id=rule_id,
             file_path=rel_path,
             snippet=clean_snippet or message
         )
 
-        title = check_id.replace("-", " ").replace("_", " ").title()
-
         finding = Finding(
             finding_id=f"DG-{uuid.uuid4().hex[:8].upper()}",
             scan_id=scan_id,
-            rule_id=check_id,
+            rule_id=rule_id,
             tool="semgrep",
             title=title,
             category=category,

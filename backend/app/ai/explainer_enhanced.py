@@ -128,6 +128,26 @@ EXTENDED_DETERMINISTIC_EXPLANATIONS: Dict[str, Dict[str, str]] = {
         "corrected_code": "response.headers['Access-Control-Allow-Origin'] = 'https://trusted-site.com'",
         "diff_unified": "@@ -5,1 +5,1 @@\n- response.headers['Access-Control-Allow-Origin'] = '*'\n+ response.headers['Access-Control-Allow-Origin'] = 'https://trusted-site.com'",
         "uncertainty_note": "Consider preflight requests and credential-included requests when configuring CORS."
+    },
+    "insecure-eval": {
+        "plain_explanation": "The application dynamically executes code strings using eval() or exec() on inputs that can be influenced by users.",
+        "why_it_matters": "Dynamic code evaluation allows attackers to execute arbitrary Python code directly on the host server, leading to immediate Remote Code Execution (RCE) and total system compromise.",
+        "attack_scenario": "An attacker enters `__import__('os').system('cat /etc/passwd')` into a formula or expression input field to execute unauthorized shell commands.",
+        "recommended_fix": "Avoid eval() entirely. Use ast.literal_eval() to parse Python data structures safely, or use a secure expression parser library like simpleeval.",
+        "original_code": "computed = eval(expr)",
+        "corrected_code": "import ast\ncomputed = ast.literal_eval(expr)",
+        "diff_unified": "@@ -1,1 +1,2 @@\n- computed = eval(expr)\n+ import ast\n+ computed = ast.literal_eval(expr)",
+        "uncertainty_note": "If dynamic expressions are required, use a sandboxed AST-based evaluator."
+    },
+    "weak-hash": {
+        "plain_explanation": "The application uses an obsolete, cryptographically broken hashing algorithm (such as MD5 or SHA-1) for security-sensitive operations.",
+        "why_it_matters": "MD5 and SHA-1 suffer from well-documented collision attacks and can be reversed using precomputed rainbow tables in seconds.",
+        "attack_scenario": "An attacker generates an MD5 collision to forge authentic-looking digital signatures or cracks password hashes in minutes.",
+        "recommended_fix": "Use SHA-256 (hashlib.sha256) for integrity checking, or Argon2id / bcrypt for password hashing.",
+        "original_code": "token_hash = hashlib.md5(token.encode()).hexdigest()",
+        "corrected_code": "token_hash = hashlib.sha256(token.encode()).hexdigest()",
+        "diff_unified": "@@ -1,1 +1,1 @@\n- token_hash = hashlib.md5(token.encode()).hexdigest()\n+ token_hash = hashlib.sha256(token.encode()).hexdigest()",
+        "uncertainty_note": "Ensure modern salts and work factors are applied if hashing passwords."
     }
 }
 
@@ -240,19 +260,20 @@ class EnhancedAIExplainerService:
         """Get deterministic explanation with extended coverage."""
         category = (finding.category or "").lower()
         file_path = (finding.file_path or "").lower()
+        search_blob = f"{(finding.rule_id or '')} {(finding.category or '')} {(finding.title or '')} {(finding.evidence_snippet or '')}".lower().replace("_", "-")
         
         matched = None
         
         # Check framework-specific explanations first
         for key in FRAMEWORK_SPECIFIC_EXPLANATIONS:
-            if key in category or (key.replace("-", "_") in category):
+            if key in search_blob or key.replace("-", "_") in search_blob:
                 matched = FRAMEWORK_SPECIFIC_EXPLANATIONS[key]
                 break
         
         # Check general vulnerability categories
         if not matched:
             for key in EXTENDED_DETERMINISTIC_EXPLANATIONS:
-                if key in category or (key.replace("-", "_") in category):
+                if key in search_blob or key.replace("-", " ") in search_blob or key.replace("-", "_") in search_blob:
                     matched = EXTENDED_DETERMINISTIC_EXPLANATIONS[key]
                     break
         

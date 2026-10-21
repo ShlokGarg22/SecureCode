@@ -30,56 +30,130 @@ SEVERITY_ORDER = {
 }
 
 
-def format_github_step_summary(result: ScanResult) -> str:
-    """Format an attractive Markdown dashboard for GitHub Actions $GITHUB_STEP_SUMMARY."""
+def format_github_step_summary(result: ScanResult, fail_on: str = "high") -> str:
+    """Format an executive-grade Markdown security audit dashboard for GitHub Actions."""
+    threshold_level = SeverityLevel(fail_on.lower()) if fail_on.lower() in [s.value for s in SeverityLevel] else SeverityLevel.HIGH
+    min_weight = SEVERITY_ORDER.get(threshold_level, 4)
+    violating = [f for f in result.findings if SEVERITY_ORDER.get(f.severity, 0) >= min_weight]
+
+    status_icon = "❌" if (violating and fail_on.lower() != "none") else "✅"
+    status_text = f"Policy Blocked ({len(violating)} issues meet or exceed threshold '{fail_on.upper()}')" if (violating and fail_on.lower() != "none") else "All Checks Passed"
+
     lines = [
-        f"## 🛡️ SecureCode Review: {result.project_name}",
+        "# 🛡️ SecureCode Security Audit Report",
         "",
-        f"- **Scan ID**: `{result.scan_id}`",
-        f"- **Scanners**: {', '.join(result.scanners_used) or 'None'}",
-        f"- **Total Findings**: **{result.findings_count}**",
+        f"> **Project:** `{result.project_name}` &nbsp;|&nbsp; **Scan ID:** `{result.scan_id}` &nbsp;|&nbsp; **Engines:** `{', '.join(result.scanners_used) or 'Semgrep + Gitleaks'}` &nbsp;|&nbsp; **Status:** {status_icon} **{status_text}**",
         "",
-        "### 📊 Severity Breakdown",
+        "---",
         "",
-        "| Critical 🔴 | High 🟠 | Medium 🟡 | Low 🔵 | Info ⚪ |",
-        "| :---: | :---: | :---: | :---: | :---: |",
-        f"| {result.severity_breakdown.critical} | {result.severity_breakdown.high} | {result.severity_breakdown.medium} | {result.severity_breakdown.low} | {result.severity_breakdown.informational} |",
+        "### 📊 Security Posture Matrix",
+        "",
+        "| Severity Level | Count | Risk Rating | Status |",
+        "| :--- | :---: | :--- | :--- |",
+        f"| 🔴 **Critical** | **{result.severity_breakdown.critical}** | Remote Code Execution / Host Compromise | {'❌ Blocker' if result.severity_breakdown.critical > 0 else '✅ Clean'} |",
+        f"| 🟠 **High** | **{result.severity_breakdown.high}** | Direct Exploitation / Exposed Secrets | {'❌ Action Required' if result.severity_breakdown.high > 0 else '✅ Clean'} |",
+        f"| 🟡 **Medium** | **{result.severity_breakdown.medium}** | Path Traversal / Injection Vectors | {'⚠️ Review' if result.severity_breakdown.medium > 0 else '✅ Clean'} |",
+        f"| 🔵 **Low** | **{result.severity_breakdown.low}** | Cryptographic & Config Hardening | {'ℹ️ Note' if result.severity_breakdown.low > 0 else '✅ Clean'} |",
+        f"| ⚪ **Informational** | **{result.severity_breakdown.informational}** | Code Quality & Best Practices | ✅ Clean |",
         "",
     ]
 
     if not result.findings:
-        lines.append("🎉 **No security vulnerabilities detected! Clean code.**\n")
+        lines.extend([
+            "> [!NOTE]",
+            "> 🎉 **Zero Vulnerabilities Detected!** Your codebase passed all security rules and secret scanning checks.",
+            ""
+        ])
         return "\n".join(lines)
 
-    lines.append("> [!TIP]")
-    lines.append("> **Automated Fix Patch Available**: A Git unified remediation patch was generated for this commit.")
-    lines.append("> Download the `remediation-patch` artifact from this workflow run and apply all fixes instantly:")
-    lines.append("> ```bash")
-    lines.append("> git apply remediation.patch")
-    lines.append("> ```\n")
+    lines.extend([
+        "---",
+        "",
+        "### ⚡ 1-Click Automated Remediation Patch",
+        "",
+        "> [!TIP]",
+        "> **SecureCode generated an automated Git unified fix patch** containing verified remediations for detected issues.",
+        "> You can download **`remediation-patch`** from the **Artifacts** section at the bottom of this page and apply all fixes instantly:",
+        "> ```bash",
+        "> git apply remediation.patch",
+        "> ```",
+        "",
+        "---",
+        "",
+        "### 🔍 Detailed Security Findings & AI Explanations",
+        "",
+        "_Findings are prioritized by severity. Critical and High items are expanded by default for immediate inspection._",
+        ""
+    ])
 
-    lines.append("### 🔍 Security Findings & AI Remediations\n")
-    for idx, f in enumerate(result.findings[:25], 1):
-        icon = "🔴" if f.severity.value in ["critical", "high"] else "🟡" if f.severity.value == "medium" else "🔵"
-        lines.append(f"<details>")
-        lines.append(f"<summary><b>{idx}. {icon} [{f.severity.value.upper()}] {f.title}</b> — <code>{f.file_path}:{f.line_number}</code></summary>\n")
-        lines.append(f"- **File**: `{f.file_path}` (Line {f.line_number})")
-        lines.append(f"- **Rule ID**: `{f.rule_id}`")
+    # Sort findings by severity descending so Critical/High appear first
+    sorted_findings = sorted(
+        result.findings,
+        key=lambda f: SEVERITY_ORDER.get(f.severity, 0),
+        reverse=True
+    )
+
+    for idx, f in enumerate(sorted_findings[:25], 1):
+        sev_str = f.severity.value.upper()
+        if f.severity == SeverityLevel.CRITICAL:
+            icon = "🔴"
+            open_attr = "open"
+        elif f.severity == SeverityLevel.HIGH:
+            icon = "🟠"
+            open_attr = "open"
+        elif f.severity == SeverityLevel.MEDIUM:
+            icon = "🟡"
+            open_attr = ""
+        else:
+            icon = "🔵"
+            open_attr = ""
+
+        clean_path = f.file_path.replace("\\", "/")
+
+        lines.append(f"<details {open_attr}>")
+        lines.append(f"<summary><b>{idx}. {icon} [{sev_str}] {f.title}</b> &nbsp;—&nbsp; <code>{clean_path}:{f.line_number}</code></summary>")
+        lines.append("")
+        lines.append("<br/>")
+        lines.append("")
+        lines.append("| Property | Detail |")
+        lines.append("| :--- | :--- |")
+        lines.append(f"| 📁 **Location** | `{clean_path}` (Line **{f.line_number}**) |")
+        lines.append(f"| 🎯 **Rule ID** | `{f.rule_id}` |")
+        lines.append(f"| 🏷️ **Category** | `{f.category or 'Security Vulnerability'}` |")
+        lines.append(f"| 🛡️ **Confidence** | `{f.confidence.value.capitalize() if f.confidence else 'High'}` |")
+        lines.append("")
+
         if f.ai_explanation:
-            if f.ai_explanation.plain_explanation:
-                lines.append(f"- **Why it matters**: {f.ai_explanation.plain_explanation}")
-            if f.ai_explanation.attack_scenario:
-                lines.append(f"- **Attack Scenario**: {f.ai_explanation.attack_scenario}")
-            if f.ai_explanation.recommended_fix:
-                lines.append(f"- **Recommended Fix**: {f.ai_explanation.recommended_fix}")
-            if f.ai_explanation.diff_unified:
-                lines.append("\n**Suggested Remediation Diff:**\n")
+            exp = f.ai_explanation
+            if exp.plain_explanation:
+                lines.append("#### ⚠️ Why This Is Dangerous")
+                lines.append(exp.plain_explanation)
+                lines.append("")
+
+            if exp.attack_scenario:
+                lines.append("#### 💥 Attack Scenario")
+                lines.append(f"> {exp.attack_scenario}")
+                lines.append("")
+
+            if exp.recommended_fix:
+                lines.append("#### 💡 How to Fix It")
+                lines.append(exp.recommended_fix)
+                lines.append("")
+
+            if exp.diff_unified:
+                clean_diff = exp.diff_unified.replace("\\n", "\n").strip()
+                lines.append("#### 🛠️ Suggested Remediation Diff")
                 lines.append("```diff")
-                lines.append(f.ai_explanation.diff_unified.strip())
-                lines.append("```\n")
+                lines.append(clean_diff)
+                lines.append("```")
+                lines.append("")
         elif f.remediation:
-            lines.append(f"- **Fix**: {f.remediation}")
-        lines.append("</details>\n")
+            lines.append("#### 💡 Recommended Fix")
+            lines.append(f.remediation)
+            lines.append("")
+
+        lines.append("</details>")
+        lines.append("")
 
     return "\n".join(lines)
 
@@ -201,7 +275,7 @@ def run_cli_scan(
     gh_summary_path = os.getenv("GITHUB_STEP_SUMMARY")
     if gh_summary_path:
         try:
-            summary_content = format_github_step_summary(result)
+            summary_content = format_github_step_summary(result, fail_on=fail_on)
             with open(gh_summary_path, "a", encoding="utf-8") as f:
                 f.write(summary_content + "\n")
             print("[+] Appended results to GitHub Actions Step Summary.")
