@@ -11,12 +11,22 @@ import sys
 import time
 from pathlib import Path
 
+# Ensure UTF-8 output on Windows console
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 # Load environment from .env if present
 try:
     from dotenv import load_dotenv
-    load_dotenv()
-    # Also check parent directory .env
-    load_dotenv(Path(__file__).resolve().parent / ".env")
+    root_dir = Path(__file__).resolve().parent
+    if (root_dir / "backend" / ".env").exists():
+        load_dotenv(root_dir / "backend" / ".env", override=True)
+    if (root_dir / ".env").exists():
+        load_dotenv(root_dir / ".env", override=False)
 except ImportError:
     pass
 

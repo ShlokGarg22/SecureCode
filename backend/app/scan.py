@@ -123,7 +123,16 @@ def format_github_step_summary(result: ScanResult, fail_on: str = "high") -> str
         lines.append(f"| 🛡️ **Confidence** | `{f.confidence.value.capitalize() if f.confidence else 'High'}` |")
         if f.ai_explanation:
             prov = (f.ai_explanation.provider or "").lower()
-            engine_badge = "🤖 Live AI (Groq LLaMA 3.3 70B)" if "groq" in prov else "🤖 Live AI (Google Gemini)" if "gemini" in prov else "🤖 Live AI (OpenAI)" if "openai" in prov else "🛡️ Offline Security Knowledge Base"
+            model_name = getattr(f.ai_explanation, "model", "") or ""
+            if "groq" in prov:
+                clean_model = model_name.replace("openai/", "").replace("meta-llama/", "")
+                engine_badge = f"🤖 Live AI (Groq {clean_model or 'Cloud LLM'})"
+            elif "gemini" in prov:
+                engine_badge = f"🤖 Live AI (Google Gemini {model_name})"
+            elif "openai" in prov:
+                engine_badge = f"🤖 Live AI (OpenAI {model_name})"
+            else:
+                engine_badge = "🛡️ Offline Security Knowledge Base"
             lines.append(f"| 🧠 **Analysis Engine** | `{engine_badge}` |")
         lines.append("")
 

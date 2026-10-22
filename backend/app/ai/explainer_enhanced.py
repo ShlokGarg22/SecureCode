@@ -433,9 +433,16 @@ class EnhancedAIExplainerService:
         candidates = []
         if preferred:
             candidates.append(preferred)
-        # Fast, active Groq models in order of priority:
-        # llama-3.1-8b-instant has 30,000 TPM limit (super stable on free tier)
-        for m in ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "openai/gpt-oss-20b", "openai/gpt-oss-120b", "mixtral-8x7b-32768", "gemma2-9b-it"]:
+        # Verified active Groq models in order of capability & availability:
+        # openai/gpt-oss-120b and openai/gpt-oss-20b have 131k context and are active on Groq
+        for m in [
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
+            "openai/gpt-oss-safeguard-20b",
+            "allam-2-7b",
+            "llama-3.1-8b-instant",
+            "llama-3.3-70b-versatile"
+        ]:
             if m not in candidates:
                 candidates.append(m)
 
