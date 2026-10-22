@@ -34,6 +34,10 @@ inputs:
     description: "Optional Groq API key for high-speed Llama 3.3 remediation generation"
     required: false
     default: ""
+  groq-model:
+    description: "Optional Groq model ID (defaults to automatic multi-model fallback across active models)"
+    required: false
+    default: ""
   gemini-api-key:
     description: "Optional Google Gemini API key"
     required: false
@@ -79,6 +83,7 @@ runs:
       env:
         PYTHONPATH: "${{ github.action_path }}/backend"
         GROQ_API_KEY: "${{ inputs.groq-api-key != '' && inputs.groq-api-key || env.GROQ_API_KEY }}"
+        GROQ_MODEL: "${{ inputs.groq-model != '' && inputs.groq-model || env.GROQ_MODEL }}"
         GEMINI_API_KEY: "${{ inputs.gemini-api-key != '' && inputs.gemini-api-key || env.GEMINI_API_KEY }}"
       run: |
         AI_FLAG=""

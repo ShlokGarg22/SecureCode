@@ -421,39 +421,54 @@ class EnhancedAIExplainerService:
         )
     
     def _call_groq_api(self, finding: Finding, prompt: str) -> AIExplanation:
-        """Call Groq API for explanation using high-speed Llama 3.3 70B."""
-        try:
-            import app.ai.explainer as exp_mod
-            Groq_cls = getattr(exp_mod, "Groq", None)
-            if Groq_cls is None:
-                from groq import Groq as Groq_cls
-            api_key = os.getenv("GROQ_API_KEY") or settings.groq_api_key
-            client = Groq_cls(api_key=api_key)
-            groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-            
-            chat_completion = client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": "You are a senior security engineer and code auditor. Return valid JSON only."},
-                    {"role": "user", "content": prompt}
-                ],
-                model=groq_model,
-                temperature=0.1,
-                response_format={"type": "json_object"}
-            )
-            
-            text_out = chat_completion.choices[0].message.content
-            parsed = json.loads(text_out)
-            
-            return AIExplanation(
-                provider="groq-llama-3.3-70b",
-                model=groq_model,
-                line_start=finding.line_number,
-                line_end=finding.end_line_number or finding.line_number,
-                **parsed
-            )
-        except Exception as e:
-            logger.error(f"Groq API call failed: {e}")
-            raise
+        """Call Groq API for explanation with multi-model fallback."""
+        import app.ai.explainer as exp_mod
+        Groq_cls = getattr(exp_mod, "Groq", None)
+        if Groq_cls is None:
+            from groq import Groq as Groq_cls
+        api_key = os.getenv("GROQ_API_KEY") or settings.groq_api_key
+        client = Groq_cls(api_key=api_key)
+
+        preferred = (os.getenv("GROQ_MODEL") or "").strip()
+        candidates = []
+        if preferred:
+            candidates.append(preferred)
+        # Fast, active Groq models in order of priority:
+        # llama-3.1-8b-instant has 30,000 TPM limit (super stable on free tier)
+        for m in ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "openai/gpt-oss-20b", "openai/gpt-oss-120b", "mixtral-8x7b-32768", "gemma2-9b-it"]:
+            if m not in candidates:
+                candidates.append(m)
+
+        last_err = None
+        for model in candidates:
+            try:
+                chat_completion = client.chat.completions.create(
+                    messages=[
+                        {"role": "system", "content": "You are a senior security engineer and code auditor. Return valid JSON only."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    model=model,
+                    temperature=0.1,
+                    response_format={"type": "json_object"}
+                )
+                
+                text_out = chat_completion.choices[0].message.content
+                parsed = json.loads(text_out)
+                
+                return AIExplanation(
+                    provider=f"groq-{model}",
+                    model=model,
+                    line_start=finding.line_number,
+                    line_end=finding.end_line_number or finding.line_number,
+                    **parsed
+                )
+            except Exception as e:
+                last_err = e
+                print(f"    [AI Engine] Groq model '{model}' failed ({e}). Trying next model...", file=sys.stderr)
+                continue
+
+        logger.error(f"All Groq models failed: {last_err}")
+        raise last_err or RuntimeError("All Groq models failed")
     
     def _call_gemini_api(self, finding: Finding, prompt: str) -> AIExplanation:
         """Call Google Gemini API for explanation."""
